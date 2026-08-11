@@ -1,22 +1,18 @@
-"""Findings: severity model, the Finding data class, and Discord embed rendering.
-
-No emoji, no marketing copy. Plain, scannable output.
-"""
+"""Findings: severity model, the Finding data class, and Discord embed rendering."""
 
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import List, Optional
-
 import discord
 
-# Embed accent colors per severity (Discord decimal format).
 SEVERITY_COLOR = {
-    "CRITICAL": 0x8B0000,  # dark red
-    "HIGH": 0xC0392B,      # red
-    "MEDIUM": 0xB9770E,    # amber
-    "LOW": 0x1F618D,       # blue
-    "INFO": 0x566573,      # grey
+    "CRITICAL": 0x8B0000,
+    "HIGH": 0xC0392B,
+    "MEDIUM": 0xB9770E,
+    "LOW": 0x1F618D,
+    "INFO": 0x566573,
 }
+
 
 class Severity(IntEnum):
     CRITICAL = 4
@@ -29,17 +25,15 @@ class Severity(IntEnum):
 @dataclass
 class Finding:
     severity: Severity
-    check: str          # check id, e.g. "everyone_excess"
-    title: str          # short label
-    detail: str         # what was found
-    target: str = ""    # role / channel / member name
+    check: str
+    title: str
+    detail: str
+    target: str = ""
     recommendation: str = ""
-    # 新規フィールド
-    description: str = ""           # 何が問題か（平易な説明）
-    impact: str = ""                # 何が起こり得るか
-    fix_steps: List[str] = field(default_factory=list)  # 修正手順
-    auto_fixable: bool = False      # 自動修正可能か
-    auto_fix_action: Optional[dict] = None  # 自動修正用のアクション
+    description: str = ""
+    impact: str = ""
+    fix_steps: List[str] = field(default_factory=list)
+    auto_fixable: bool = False
 
     def as_dict(self) -> dict:
         return {
@@ -67,7 +61,7 @@ def build_summary_embed(guild_name: str, findings: List[Finding], scanned: int, 
 
     total = len(findings)
     if total == 0:
-        color = 0x1E8449  # green
+        color = 0x1E8449
         desc = "✅ 問題は検出されませんでした。このサーバーは安全です。"
     else:
         worst = max(findings, key=lambda f: f.severity.value).severity
@@ -95,17 +89,16 @@ def build_summary_embed(guild_name: str, findings: List[Finding], scanned: int, 
 
 
 def build_detail_embeds(findings: List[Finding], per_embed: int = 10) -> List[discord.Embed]:
-    """Split findings into multiple embeds (Discord field limits)."""
     embeds: List[discord.Embed] = []
     chunk = sort_findings(findings)
     for i in range(0, len(chunk), per_embed):
-        group = chunk[i : i + per_embed]
+        group = chunk[i: i + per_embed]
         embed = discord.Embed(title="📋 詳細レポート", color=SEVERITY_COLOR["INFO"])
         for f in group:
             name = f"**[{f.severity.name}] {f.title}**"
             if f.target:
                 name += f" - {f.target}"
-            
+
             body = f"**問題**: {f.description or f.detail}\n"
             if f.impact:
                 body += f"**影響**: {f.impact}\n"
@@ -124,7 +117,6 @@ def build_detail_embeds(findings: List[Finding], per_embed: int = 10) -> List[di
 
 
 def build_text_report(guild_name: str, findings: List[Finding], risks: dict = None) -> str:
-    """プレーンテキストレポート（コピー用）"""
     lines = [
         "=" * 60,
         f"Discord セキュリティ監査レポート",
