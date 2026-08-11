@@ -2,12 +2,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import config
-import Severity
 from auditor import check_everyone_visible, check_mention_everyone, run_audit
 from findings import (
     build_detail_embeds,
     build_summary_embed,
-    build_text_report,
+    build_text_report,Severity,
 )
 from risks import calculate_risks
 
