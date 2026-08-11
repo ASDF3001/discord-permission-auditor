@@ -1,17 +1,10 @@
-"""Permission audit logic.
-
-Each check is a standalone coroutine that appends Finding objects to a list.
-Heavy lifting uses guild cache (guild.roles, guild.channels, guild.members)
-to keep memory and API usage low; only invites fetch live data on demand.
-"""
+"""Permission audit logic."""
 
 from typing import List
-
+import re
 import discord
-
 from findings import Finding, Severity
 
-# Permissions considered dangerous when held by @everyone or external bots.
 DANGEROUS_PERMS = {
     "administrator": Severity.CRITICAL,
     "ban_members": Severity.HIGH,
@@ -33,10 +26,9 @@ def _perm_label(perm: str) -> str:
 
 
 async def check_bot_self(guild: discord.Guild, me: discord.Member, out: List[Finding]) -> None:
-    """Verify the bot can actually read what it needs. Not a gap in the server."""
     needed = [
         "view_audit_log",
-        "manage_roles",   # to read high-position roles accurately
+        "manage_roles",
         "read_messages",
     ]
     missing = [p for p in needed if not getattr(me.guild_permissions, p, False)]
@@ -46,9 +38,8 @@ async def check_bot_self(guild: discord.Guild, me: discord.Member, out: List[Fin
                 severity=Severity.INFO,
                 check="bot_perm_selfcheck",
                 title="Botの権限が不足しています",
-                detail="不足している権限: " + ", ".join(_perm_label(p) for p in missing)
-                + "。一部の監査結果が不完全になる可能性があります。",
-                recommendation="Botに以下の権限を付与してください: " + ", ".join(_perm_label(p) for p in missing),
+                detail="不足している権限: " + ", ".join(_perm_label(p) for p in missing),
+                recommendation="Botに必要な権限を付与してください。",
                 description="Bot自身が監査に必要な権限を持っていません。",
                 impact="権限が足りないと、正しい監査結果が得られない場合があります。",
                 fix_steps=[
@@ -73,8 +64,8 @@ async def check_everyone_excess(guild: discord.Guild, cfg, out: List[Finding]) -
                     title=f"@everyone が危険な権限 '{_perm_label(perm)}' を持っています",
                     detail=f"@everyone に '{_perm_label(perm)}' が付与されています。",
                     target="@everyone",
-                    recommendation="この権限を @everyone から削除し、必要なら特定のロールに付与してください。",
-                    description=f"@everyone は全メンバーに適用されるロールです。ここに '{_perm_label(perm)}' があると、全員がその権限を持つことになります。",
+                    recommendation="この権限を @everyone から削除してください。",
+                    description=f"@everyone は全メンバーに適用されるロールです。",
                     impact=f"悪意のあるメンバーが '{_perm_label(perm)}' を悪用すると、サーバーに深刻な被害が出る可能性があります。",
                     fix_steps=[
                         "サーバー設定 > ロール を開く",
@@ -101,10 +92,9 @@ async def check_external_bot_perms(guild: discord.Guild, cfg, out: List[Finding]
                         severity=sev if is_external else Severity.MEDIUM,
                         check="external_bot_perms",
                         title=f"Bot '{member.name}' が危険な権限 '{_perm_label(perm)}' を持っています",
-                        detail=f"Bot '{member.name}' に '{_perm_label(perm)}' が付与されています。"
-                        + ("" if is_external else " (サーバーオーナー所有)"),
+                        detail=f"Bot '{member.name}' に '{_perm_label(perm)}' が付与されています。",
                         target=member.name,
-                        recommendation="このBotに本当にその権限が必要か確認し、不要なら削除してください。",
+                        recommendation="このBotに本当にその権限が必要か確認してください。",
                         description=f"Botに '{_perm_label(perm)}' があると、Botが乗っ取られた場合に悪用されるリスクがあります。",
                         impact=f"悪意のある第三者がBotを操作すると、'{_perm_label(perm)}' を使ってサーバーに被害を与える可能性があります。",
                         fix_steps=[
@@ -113,13 +103,12 @@ async def check_external_bot_perms(guild: discord.Guild, cfg, out: List[Finding]
                             f"「{_perm_label(perm)}」のチェックを外す",
                             "保存する"
                         ],
-                        auto_fixable=False,  # Botの権限変更はBot自身ではできない場合がある
+                        auto_fixable=False,
                     )
                 )
 
 
 async def check_server_misconfig(guild: discord.Guild, cfg, out: List[Finding]) -> None:
-    # 2FA requirement not enforced
     if guild.mfa_level == 0:
         out.append(
             Finding(
@@ -135,10 +124,9 @@ async def check_server_misconfig(guild: discord.Guild, cfg, out: List[Finding]) 
                     "「2FAを要求」をONにする",
                     "保存する"
                 ],
-                auto_fixable=False,  # サーバー設定変更はBot権限ではできない
+                auto_fixable=False,
             )
         )
-    # Open join with no verification level
     if guild.verification_level in (discord.VerificationLevel.none,):
         out.append(
             Finding(
@@ -157,7 +145,6 @@ async def check_server_misconfig(guild: discord.Guild, cfg, out: List[Finding]) 
                 auto_fixable=False,
             )
         )
-    # Explicit content filter off
     if guild.explicit_content_filter == discord.ContentFilter.disabled:
         out.append(
             Finding(
@@ -176,7 +163,6 @@ async def check_server_misconfig(guild: discord.Guild, cfg, out: List[Finding]) 
                 auto_fixable=False,
             )
         )
-    # Anyone can create invites (guild-level)
     if guild.default_role.permissions.create_instant_invite:
         out.append(
             Finding(
@@ -197,7 +183,6 @@ async def check_server_misconfig(guild: discord.Guild, cfg, out: List[Finding]) 
                 auto_fixable=True,
             )
         )
-    # Anyone can manage webhooks (guild-level)
     if guild.default_role.permissions.manage_webhooks:
         out.append(
             Finding(
@@ -241,8 +226,8 @@ async def check_role_inheritance(guild: discord.Guild, cfg, out: List[Finding]) 
                             title=f"冗長な権限 '{_perm_label(perm)}' がロール '{role.name}' にあります",
                             detail=f"ロール '{role.name}' は '{_perm_label(perm)}' を持っていますが、上位ロールも同じ権限を持っています。",
                             target=role.name,
-                            recommendation="下位ロールからこの権限を削除して、権限の範囲を狭めてください。",
-                            description="同じ権限が複数のロールに付与されていると、権限の管理が複雑になり、誤って権限を付与しやすくなります。",
+                            recommendation="下位ロールからこの権限を削除してください。",
+                            description="同じ権限が複数のロールに付与されていると、権限の管理が複雑になります。",
                             impact="権限の継承が複雑だと、意図しないメンバーに権限が渡る可能性があります。",
                             fix_steps=[
                                 "サーバー設定 > ロール を開く",
@@ -282,9 +267,8 @@ async def check_external_bot_usable(guild: discord.Guild, cfg, out: List[Finding
                         "サーバー設定 > チャンネル を開く",
                         "Botを制限したいチャンネルを選択",
                         "「詳細な権限」からBotの「スラッシュコマンドを使用」をOFFにする",
-                        "または、Botのロールから「スラッシュコマンドを使用」を削除する"
                     ],
-                    auto_fixable=False,  # チャンネル権限の変更は複雑なので自動化しない
+                    auto_fixable=False,
                 )
             )
 
@@ -379,7 +363,7 @@ async def check_stale_invites(guild: discord.Guild, cfg, out: List[Finding]) -> 
                         "該当の招待リンクを探す",
                         "削除するか、有効期限を設定する"
                     ],
-                    auto_fixable=True,
+                    auto_fixable=False,
                 )
             )
 
@@ -409,7 +393,7 @@ async def check_owner_admin_roles(guild: discord.Guild, cfg, out: List[Finding])
                         "該当メンバーをロールから削除する",
                         "または、ロールから管理者権限を削除する"
                     ],
-                    auto_fixable=False,  # メンバーからロールを剥奪するのは危険
+                    auto_fixable=False,
                 )
             )
 
@@ -445,7 +429,6 @@ async def check_integration_webhooks(guild: discord.Guild, cfg, out: List[Findin
             )
 
 
-# Ordered registry used by the runner.
 ALL_CHECKS = [
     ("bot_perm_selfcheck", check_bot_self),
     ("everyone_excess", check_everyone_excess),
@@ -462,7 +445,6 @@ ALL_CHECKS = [
 
 
 async def run_audit(guild: discord.Guild, cfg) -> tuple[List[Finding], int]:
-    """Run all enabled checks. Returns (findings, number_of_checks_run)."""
     out: List[Finding] = []
     me = guild.me
     ran = 0
@@ -498,17 +480,19 @@ async def run_audit(guild: discord.Guild, cfg) -> tuple[List[Finding], int]:
             continue
     return out, ran
 
-# auditor.py の末尾に追加
+
+# ===== 修正関数 =====
 
 async def fix_everyone_permissions(guild: discord.Guild, finding: Finding) -> bool:
-    """@everyone から危険権限を削除"""
     try:
         everyone = guild.default_role
-        perm_name = finding.detail.split("'")[1] if "'" in finding.detail else None
+        perm_name = None
+        for perm in DANGEROUS_PERMS:
+            if perm.lower() in finding.detail.lower():
+                perm_name = perm
+                break
         if not perm_name:
             return False
-        
-        # 現在の権限を取得して修正
         perms = everyone.permissions
         setattr(perms, perm_name, False)
         await everyone.edit(permissions=perms)
@@ -518,7 +502,6 @@ async def fix_everyone_permissions(guild: discord.Guild, finding: Finding) -> bo
 
 
 async def fix_invite_permission(guild: discord.Guild) -> bool:
-    """@everyone の招待作成権限を削除"""
     try:
         everyone = guild.default_role
         perms = everyone.permissions
@@ -530,7 +513,6 @@ async def fix_invite_permission(guild: discord.Guild) -> bool:
 
 
 async def fix_webhook_permission(guild: discord.Guild) -> bool:
-    """@everyone のWebhook管理権限を削除"""
     try:
         everyone = guild.default_role
         perms = everyone.permissions
@@ -542,17 +524,18 @@ async def fix_webhook_permission(guild: discord.Guild) -> bool:
 
 
 async def fix_redundant_permission(guild: discord.Guild, finding: Finding) -> bool:
-    """下位ロールから冗長権限を削除"""
     try:
         role_name = finding.target
         role = discord.utils.get(guild.roles, name=role_name)
         if not role:
             return False
-        
-        perm_name = finding.detail.split("'")[1] if "'" in finding.detail else None
+        perm_name = None
+        for perm in DANGEROUS_PERMS:
+            if perm.lower() in finding.detail.lower():
+                perm_name = perm
+                break
         if not perm_name:
             return False
-        
         perms = role.permissions
         setattr(perms, perm_name, False)
         await role.edit(permissions=perms)
@@ -562,16 +545,13 @@ async def fix_redundant_permission(guild: discord.Guild, finding: Finding) -> bo
 
 
 async def fix_channel_visibility(guild: discord.Guild, finding: Finding) -> bool:
-    """@everyone のチャンネル可視性を制限"""
     try:
-        # チャンネル名を抽出
-        channel_names = finding.detail.split(": ")[1].split(", ") if ": " in finding.detail else []
+        channel_names = re.findall(r'#([a-zA-Z0-9\-_]+)', finding.detail)
         if not channel_names:
             return False
-        
         success = True
-        for name in channel_names[:5]:  # 最初の5個だけ修正（多すぎると時間がかかる）
-            channel = discord.utils.get(guild.channels, name=name.lstrip("#"))
+        for name in channel_names[:5]:
+            channel = discord.utils.get(guild.channels, name=name)
             if channel:
                 try:
                     await channel.set_permissions(guild.default_role, view_channel=False)
@@ -583,20 +563,18 @@ async def fix_channel_visibility(guild: discord.Guild, finding: Finding) -> bool
 
 
 async def fix_mention_permission(guild: discord.Guild, finding: Finding) -> bool:
-    """一般メンバーのメンション権限を削除"""
     try:
-        # メンバー名を抽出
-        members_str = finding.detail.split(": ")[1] if ": " in finding.detail else ""
-        member_names = members_str.split(", ") if members_str else []
+        detail_parts = finding.detail.split(": ")
+        if len(detail_parts) < 2:
+            return False
+        member_names = re.findall(r'[a-zA-Z0-9_\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]+', detail_parts[-1])
         if not member_names:
             return False
-        
         success = True
-        for name in member_names[:5]:  # 最初の5人だけ
+        for name in member_names[:5]:
             member = discord.utils.get(guild.members, display_name=name)
             if member and not member.guild_permissions.administrator:
                 try:
-                    # メンバーのトップロールから権限を削除
                     role = member.top_role
                     perms = role.permissions
                     perms.mention_everyone = False
@@ -609,9 +587,14 @@ async def fix_mention_permission(guild: discord.Guild, finding: Finding) -> bool
 
 
 async def fix_stale_invite(guild: discord.Guild, finding: Finding) -> bool:
-    """無期限招待リンクを削除"""
     try:
         code = finding.target
+        if not code:
+            match = re.search(r'コード: ([a-zA-Z0-9]+)', finding.detail)
+            if match:
+                code = match.group(1)
+            else:
+                return False
         invites = await guild.invites()
         for inv in invites:
             if inv.code == code:
@@ -623,9 +606,14 @@ async def fix_stale_invite(guild: discord.Guild, finding: Finding) -> bool:
 
 
 async def fix_orphaned_webhook(guild: discord.Guild, finding: Finding) -> bool:
-    """孤立Webhookを削除"""
     try:
         webhook_name = finding.target
+        if not webhook_name:
+            match = re.search(r"Webhook '([^']+)'", finding.detail)
+            if match:
+                webhook_name = match.group(1)
+            else:
+                return False
         hooks = await guild.webhooks()
         for hook in hooks:
             if hook.name == webhook_name:
