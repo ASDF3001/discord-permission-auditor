@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import config
+import asyncio
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -15,28 +16,30 @@ async def load_cogs():
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
-    # 登録されてるコマンドを確認（デバッグ用）
+    # 同期はここでやる（on_ready が呼ばれた後なら application_id が取れる）
+    if config.GUILD_ID:
+        guild = discord.Object(id=config.GUILD_ID)
+        bot.tree.copy_global_to(guild=guild)
+        await bot.tree.sync(guild=guild)
+    else:
+        await bot.tree.sync()
+    
+    print(f"Ready as {bot.user} (synced commands)")
+    
+    # デバッグ用：登録されてるコマンドを表示
     cmds = await bot.tree.fetch_commands()
-    print(f"現在の登録コマンド: {[c.name for c in cmds]}")
+    print("登録済みコマンド:", [c.name for c in cmds])
 
-async def main():
-    async with bot:
-        # cogsを読み込んでから同期
-        await load_cogs()
-        
-        if config.GUILD_ID:
-            guild = discord.Object(id=config.GUILD_ID)
-            bot.tree.copy_global_to(guild=guild)
-            await bot.tree.sync(guild=guild)
-        else:
-            await bot.tree.sync()
-        
-        print("コマンド同期完了")
-        await bot.start(config.DISCORD_TOKEN)
+# setup_hook は on_ready の前に呼ばれるので、ここで cogs を読み込む
+async def setup_hook():
+    await load_cogs()
+
+bot.setup_hook = setup_hook
+
+def main():
+    if not config.DISCORD_TOKEN:
+        raise SystemExit("DISCORD_TOKEN is not set. Copy .env.example to .env and fill it in.")
+    bot.run(config.DISCORD_TOKEN)
 
 if __name__ == "__main__":
-    if not config.DISCORD_TOKEN:
-        raise SystemExit("DISCORD_TOKEN is not set.")
-    import asyncio
-    asyncio.run(main())
+    main()
