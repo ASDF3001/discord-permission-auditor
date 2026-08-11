@@ -22,6 +22,10 @@ async def on_ready():
     else:
         await bot.tree.sync()
     print(f"Ready as {bot.user} (synced commands)")
+    
+    # 登録されてるコマンド一覧を表示
+    cmds = await bot.tree.fetch_commands()
+    print("登録済みコマンド:", [c.name for c in cmds])
 
 def main():
     if not config.DISCORD_TOKEN:
