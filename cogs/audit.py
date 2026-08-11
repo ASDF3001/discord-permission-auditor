@@ -5,7 +5,6 @@ from discord.ext import commands
 import config
 from auditor import check_everyone_visible, check_mention_everyone, run_audit
 from findings import (
-    build_detail_embeds,
     build_summary_embed,
     build_text_report,
     Severity,
@@ -34,10 +33,11 @@ class AuditCog(commands.Cog):
         findings, ran = await run_audit(guild, cfg)
         risks = calculate_risks(findings)
 
+        # サマリーEmbed（リスク評価のみ）
         summary = build_summary_embed(guild.name, findings, ran, risks=risks)
         await interaction.followup.send(embed=summary)
 
-        # テキストレポートをtxtファイルで送信
+        # テキストレポートを送信（詳細はこれだけ）
         text_report = build_text_report(guild.name, findings, risks)
         if len(text_report) <= 2000:
             await interaction.followup.send(f"```\n{text_report}\n```")
@@ -47,10 +47,6 @@ class AuditCog(commands.Cog):
                 filename="audit_report.txt",
             )
             await interaction.followup.send(file=file)
-
-        details = build_detail_embeds(findings)
-        for emb in details:
-            await interaction.followup.send(embed=emb)
 
         # 修正可能な問題の件数を表示（/fix を使うよう案内）
         fixable_count = len([
@@ -83,8 +79,17 @@ class AuditCog(commands.Cog):
         if not findings:
             await interaction.followup.send("公開チャンネルは見つかりませんでした（または全て非表示です）。")
             return
-        for emb in build_detail_embeds(findings):
-            await interaction.followup.send(embed=emb)
+        
+        # テキストレポートのみ送信
+        text_report = build_text_report(guild.name, findings)
+        if len(text_report) <= 2000:
+            await interaction.followup.send(f"```\n{text_report}\n```")
+        else:
+            file = discord.File(
+                fp=io.BytesIO(text_report.encode("utf-8")),
+                filename="audit_channel_report.txt",
+            )
+            await interaction.followup.send(file=file)
 
     @app_commands.command(name="audit-mention", description="List members who can mention @everyone/@here.")
     @app_commands.default_permissions(administrator=True)
@@ -105,8 +110,17 @@ class AuditCog(commands.Cog):
         if not findings:
             await interaction.followup.send("@everyone/@hereをメンションできる一般メンバーはいません。")
             return
-        for emb in build_detail_embeds(findings):
-            await interaction.followup.send(embed=emb)
+        
+        # テキストレポートのみ送信
+        text_report = build_text_report(guild.name, findings)
+        if len(text_report) <= 2000:
+            await interaction.followup.send(f"```\n{text_report}\n```")
+        else:
+            file = discord.File(
+                fp=io.BytesIO(text_report.encode("utf-8")),
+                filename="audit_mention_report.txt",
+            )
+            await interaction.followup.send(file=file)
 
 
 async def setup(bot: commands.Bot):
