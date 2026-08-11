@@ -497,3 +497,140 @@ async def run_audit(guild: discord.Guild, cfg) -> tuple[List[Finding], int]:
         except Exception:
             continue
     return out, ran
+
+# auditor.py の末尾に追加
+
+async def fix_everyone_permissions(guild: discord.Guild, finding: Finding) -> bool:
+    """@everyone から危険権限を削除"""
+    try:
+        everyone = guild.default_role
+        perm_name = finding.detail.split("'")[1] if "'" in finding.detail else None
+        if not perm_name:
+            return False
+        
+        # 現在の権限を取得して修正
+        perms = everyone.permissions
+        setattr(perms, perm_name, False)
+        await everyone.edit(permissions=perms)
+        return True
+    except Exception:
+        return False
+
+
+async def fix_invite_permission(guild: discord.Guild) -> bool:
+    """@everyone の招待作成権限を削除"""
+    try:
+        everyone = guild.default_role
+        perms = everyone.permissions
+        perms.create_instant_invite = False
+        await everyone.edit(permissions=perms)
+        return True
+    except Exception:
+        return False
+
+
+async def fix_webhook_permission(guild: discord.Guild) -> bool:
+    """@everyone のWebhook管理権限を削除"""
+    try:
+        everyone = guild.default_role
+        perms = everyone.permissions
+        perms.manage_webhooks = False
+        await everyone.edit(permissions=perms)
+        return True
+    except Exception:
+        return False
+
+
+async def fix_redundant_permission(guild: discord.Guild, finding: Finding) -> bool:
+    """下位ロールから冗長権限を削除"""
+    try:
+        role_name = finding.target
+        role = discord.utils.get(guild.roles, name=role_name)
+        if not role:
+            return False
+        
+        perm_name = finding.detail.split("'")[1] if "'" in finding.detail else None
+        if not perm_name:
+            return False
+        
+        perms = role.permissions
+        setattr(perms, perm_name, False)
+        await role.edit(permissions=perms)
+        return True
+    except Exception:
+        return False
+
+
+async def fix_channel_visibility(guild: discord.Guild, finding: Finding) -> bool:
+    """@everyone のチャンネル可視性を制限"""
+    try:
+        # チャンネル名を抽出
+        channel_names = finding.detail.split(": ")[1].split(", ") if ": " in finding.detail else []
+        if not channel_names:
+            return False
+        
+        success = True
+        for name in channel_names[:5]:  # 最初の5個だけ修正（多すぎると時間がかかる）
+            channel = discord.utils.get(guild.channels, name=name.lstrip("#"))
+            if channel:
+                try:
+                    await channel.set_permissions(guild.default_role, view_channel=False)
+                except:
+                    success = False
+        return success
+    except Exception:
+        return False
+
+
+async def fix_mention_permission(guild: discord.Guild, finding: Finding) -> bool:
+    """一般メンバーのメンション権限を削除"""
+    try:
+        # メンバー名を抽出
+        members_str = finding.detail.split(": ")[1] if ": " in finding.detail else ""
+        member_names = members_str.split(", ") if members_str else []
+        if not member_names:
+            return False
+        
+        success = True
+        for name in member_names[:5]:  # 最初の5人だけ
+            member = discord.utils.get(guild.members, display_name=name)
+            if member and not member.guild_permissions.administrator:
+                try:
+                    # メンバーのトップロールから権限を削除
+                    role = member.top_role
+                    perms = role.permissions
+                    perms.mention_everyone = False
+                    await role.edit(permissions=perms)
+                except:
+                    success = False
+        return success
+    except Exception:
+        return False
+
+
+async def fix_stale_invite(guild: discord.Guild, finding: Finding) -> bool:
+    """無期限招待リンクを削除"""
+    try:
+        code = finding.target
+        invites = await guild.invites()
+        for inv in invites:
+            if inv.code == code:
+                await inv.delete()
+                return True
+        return False
+    except Exception:
+        return False
+
+
+async def fix_orphaned_webhook(guild: discord.Guild, finding: Finding) -> bool:
+    """孤立Webhookを削除"""
+    try:
+        webhook_name = finding.target
+        hooks = await guild.webhooks()
+        for hook in hooks:
+            if hook.name == webhook_name:
+                await hook.delete()
+                return True
+        return False
+    except Exception:
+        return False
