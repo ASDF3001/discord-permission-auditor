@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import config
+import Severity
 from auditor import check_everyone_visible, check_mention_everyone, run_audit
 from findings import (
     build_detail_embeds,
