@@ -1,3 +1,4 @@
+import io
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -6,7 +7,8 @@ from auditor import check_everyone_visible, check_mention_everyone, run_audit
 from findings import (
     build_detail_embeds,
     build_summary_embed,
-    build_text_report,Severity,
+    build_text_report,
+    Severity,
 )
 from risks import calculate_risks
 
@@ -41,12 +43,11 @@ class AuditCog(commands.Cog):
             await interaction.followup.send(f"```\n{text_report}\n```")
         else:
             file = discord.File(
-                fp=discord.BytesIO(text_report.encode("utf-8")),
+                fp=io.BytesIO(text_report.encode("utf-8")),
                 filename="audit_report.txt",
             )
             await interaction.followup.send(file=file)
 
-        # 詳細Embed
         details = build_detail_embeds(findings)
         for emb in details:
             await interaction.followup.send(embed=emb)
