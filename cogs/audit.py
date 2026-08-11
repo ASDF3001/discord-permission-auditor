@@ -3,9 +3,14 @@ from discord import app_commands
 from discord.ext import commands
 import config
 from auditor import check_everyone_visible, check_mention_everyone, run_audit
-from findings import build_detail_embeds, build_summary_embed, build_text_report
+from findings import (
+    build_detail_embeds,
+    build_summary_embed,
+    build_text_report,
+    Severity,
+)
 from risks import calculate_risks
-from cogs.fix import FixView  # 自動修正ボタンをインポート
+from cogs.fix import FixView
 
 
 class AuditCog(commands.Cog):
@@ -29,46 +34,45 @@ class AuditCog(commands.Cog):
         findings, ran = await run_audit(guild, cfg)
         risks = calculate_risks(findings)
 
-        # サマリー（リスク情報付き）
         summary = build_summary_embed(guild.name, findings, ran, risks=risks)
         await interaction.followup.send(embed=summary)
 
-        # テキストレポート（コピー用）
+        # テキストレポートをtxtファイルで送信
         text_report = build_text_report(guild.name, findings, risks)
         if len(text_report) <= 2000:
             await interaction.followup.send(f"```\n{text_report}\n```")
         else:
-            await interaction.followup.send("テキストレポートが長すぎるため、詳細はEmbedをご覧ください。")
+            # テキストファイルとして送信
+            file = discord.File(
+                fp=discord.BytesIO(text_report.encode("utf-8")),
+                filename="audit_report.txt",
+            )
+            await interaction.followup.send(file=file)
 
-        # 詳細Embed（修正可能なものはボタン付きで表示）
         details = build_detail_embeds(findings)
         for emb in details:
             await interaction.followup.send(embed=emb)
 
-        # ---- ここから自動修正ボタン ----
-        # 修正可能なFindingだけを抽出（最大5件まで）
-        fixable = [f for f in findings if f.auto_fixable][:5]
+        # 自動修正ボタン（LOW / INFO は除外）
+        fixable = [
+            f for f in findings
+            if f.auto_fixable and f.severity not in (Severity.LOW, Severity.INFO)
+        ][:5]
 
         if fixable:
-            # 各Findingに個別の修正ボタンを作成
             view = discord.ui.View(timeout=120)
-
             for i, f in enumerate(fixable):
-                # ボタンラベルは短く
                 label = f"🔧 {f.title[:20]}"
                 if len(f.title) > 20:
                     label += "…"
 
-                # 各Finding専用のFixViewを埋め込む（カスタムIDで識別）
                 button = discord.ui.Button(
                     label=label,
                     style=discord.ButtonStyle.primary,
-                    custom_id=f"fix_{i}_{f.check}"  # 一意にする
+                    custom_id=f"fix_{i}_{f.check}"
                 )
 
-                # ボタンのコールバックを動的に設定
                 async def button_callback(interaction: discord.Interaction, f=f):
-                    # FixViewを表示（モーダルを出す）
                     view = FixView(f, guild, self)
                     await interaction.response.send_message(
                         f"**{f.title}** を修正しますか？\n"
@@ -80,8 +84,7 @@ class AuditCog(commands.Cog):
                 button.callback = button_callback
                 view.add_item(button)
 
-            # 件数が多い場合の案内
-            total_fixable = len([f for f in findings if f.auto_fixable])
+            total_fixable = len([f for f in findings if f.auto_fixable and f.severity not in (Severity.LOW, Severity.INFO)])
             footer_text = f"修正可能な問題: {total_fixable}件中 {len(fixable)}件を表示"
             if total_fixable > 5:
                 footer_text += "（残りは /audit-fix コマンドで）"
