@@ -1,71 +1,92 @@
 # Discord Permission Auditor
 
-日本語版:[README_JP](README_JP.md)
+A lightweight Discord bot that scans your server for permission gaps, security misconfigurations, and risks.  
+Designed for server admins who want clear, actionable reports — not just raw permissions.
 
-A small, dependency-light Discord bot that scans a server for permission gaps
-and misconfigurations, then reports them in Discord with a severity rating.
+日本語版: [README_JP.md](README_JP.md)
 
-No background tasks, no database, no external calls. It runs only when you
-invoke a slash command, so memory and CPU use stay minimal.
+---
 
 ## Features
 
-- Scans for dangerous permissions on `@everyone` and external bots
-- Flags server misconfigurations (2FA, verification, webhook/invite creation)
-- Detects redundant or leaked permissions through role inheritance
-- Lists channels readable by `@everyone`
-- Lists non-admin members who can mention `@everyone` / `@here`
-- Surfaces stale invites and orphaned webhooks
-- Per-check toggles and whitelists via a JSON config file
-- Plain output, no emoji
+- 🔍 **Comprehensive audit** – checks `@everyone`, bots, roles, channels, invites, webhooks, and more
+- 🛡️ **Risk scoring** – evaluates Raid, Nuke, and External Attack risks
+- 📋 **Clear explanations** – each finding includes what's wrong, why it matters, and how to fix it
+- 🔧 **One‑click fixes** – safely resolve many issues with a single button (admin only)
+- 📄 **Copy‑ready text report** – plain text summary for easy sharing or saving
+- ⚙️ **Configurable** – enable/disable checks, whitelist roles/channels/bots via JSON
+- 🚀 **Lightweight** – no database, no background tasks, no external APIs
+
+---
 
 ## Setup
 
 Requires Python 3.10+.
 
-```bash
+```
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
 cp .env.example .env
 ```
 
 Edit `.env` and set:
 
-| Variable      | Description                                                        |
-|---------------|--------------------------------------------------------------------|
-| `DISCORD_TOKEN` | Bot token from the Discord Developer Portal. **Required.**       |
-| `GUILD_ID`      | Server ID to sync commands to. Optional; without it, commands are global. |
-| `CONFIG_FILE`   | Path to an optional JSON config (toggles + whitelist). Optional.   |
+| Variable | Description |
+|----------|-------------|
+| `DISCORD_TOKEN` | Bot token from Discord Developer Portal. **Required.** |
+| `GUILD_ID` | Server ID to sync commands to. Optional (global if omitted). |
+| `CONFIG_FILE` | Path to optional JSON config (toggles + whitelists). Optional. |
 
 Invite the bot with at least these permissions:
 
 - View Audit Log
-- Manage Roles (helps read high-position roles accurately)
+- Manage Roles (for accurate role hierarchy reading)
 - Read Messages / View Channels
-- Manage Webhooks (for the webhook check)
-- Manage Server (for the invite check)
+- Manage Webhooks (for webhook checks)
+- Manage Server (for invite checks)
 
 Then run:
 
-```bash
-python bot.py
 ```
+python main.py
+```
+
+---
 
 ## Commands
 
-| Command            | What it does                                              |
-|--------------------|-----------------------------------------------------------|
-| `/audit`           | Run all enabled checks on the current server.             |
-| `/audit-channel`   | List channels `@everyone` can read.                       |
-| `/audit-mention`   | List non-admin members who can mention `@everyone`/`@here`. |
-| `/audit-help`      | Show the check list and configuration notes.              |
+All commands are **administrator‑only** and respond **ephemerally** (only you can see the results).
 
-## Optional config file
+| Command | Description |
+|---------|-------------|
+| `/audit` | Run all enabled checks – shows risk summary, detailed findings, and fix buttons. |
+| `/audit-channel` | List channels `@everyone` can read. |
+| `/audit-mention` | List non‑admin members who can mention `@everyone` / `@here`. |
+| `/audit-help` | Show the check list and configuration notes. |
+| `/audit-fix` | (Under development) Fix specific issues manually. For now, use the fix buttons from `/audit`. |
+
+---
+
+## Risk Assessment
+
+After each full audit, the bot calculates three risk levels:
+
+| Risk | What it means |
+|------|---------------|
+| **Raid Risk** | How vulnerable the server is to mass‑join attacks and spam. |
+| **Nuke Risk** | How easily a malicious user or bot could destroy channels, roles, and settings. |
+| **External Attack Risk** | How exposed the server is to threats from new or untrusted members. |
+
+Each risk is rated as `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO` based on the findings.
+
+---
+
+## Optional Config File
 
 Set `CONFIG_FILE=config.json` in `.env`. Example:
 
-```json
+```
 {
   "enabled": [
     "everyone_excess",
@@ -85,13 +106,73 @@ Set `CONFIG_FILE=config.json` in `.env`. Example:
 }
 ```
 
-- `enabled`: subset of check ids to run. Omit the key to run all.
-- `whitelist_*`: role / channel / bot ids or names to ignore.
+- `enabled` – subset of check IDs to run. Omit to run all.
+- `whitelist_*` – role / channel / bot IDs or names to ignore during audits.
 
-## Severity levels
+Available check IDs:
 
-`CRITICAL > HIGH > MEDIUM > LOW > INFO`. The summary embed color reflects the
-worst issue found.
+| ID | Description |
+|----|-------------|
+| `everyone_excess` | Dangerous permissions on `@everyone` |
+| `external_bot_perms` | Dangerous permissions on external bots |
+| `server_misconfig` | 2FA, verification, invite/webhook creation settings |
+| `role_inheritance` | Redundant or leaked permissions via role hierarchy |
+| `external_bot_usable` | External bots usable by anyone |
+| `everyone_visible` | Channels readable by `@everyone` |
+| `mention_everyone` | Non‑admin members with `@everyone` / `@here` mention permission |
+| `stale_invites` | Never‑expiring invites |
+| `owner_admin_roles` | Non‑owner members with admin roles |
+| `integration_webhooks` | Orphaned webhooks (creator left the server) |
+
+---
+
+## Auto‑Fix
+
+When you run `/audit`, any fixable issues will appear with a **🔧 Fix** button.
+
+Clicking the button opens a confirmation modal showing exactly what will be changed.  
+After you confirm, the bot applies the fix and offers to re‑audit the server.
+
+**Currently fixable issues:**
+
+- Remove dangerous permissions from `@everyone`
+- Disable invite creation on `@everyone`
+- Disable webhook management on `@everyone`
+- Remove redundant permissions from lower roles
+- Restrict `@everyone` from viewing public channels
+- Remove `@everyone` / `@here` mention permission from non‑admin roles
+- Delete never‑expiring invites
+- Delete orphaned webhooks
+
+> ⚠️ The bot **never** makes changes without your explicit confirmation.
+
+---
+
+## Severity Levels
+
+Findings are classified as:
+
+`CRITICAL > HIGH > MEDIUM > LOW > INFO`
+
+The summary embed's color reflects the worst issue found.
+
+---
+
+## Architecture
+
+```
+main.py          → Bot entry point, loads cogs
+cogs/
+  ├── audit.py   → /audit, /audit-channel, /audit-mention
+  ├── help.py    → /audit-help
+  └── fix.py     → Fix buttons and /audit-fix (WIP)
+auditor.py       → Core audit logic and fix functions
+findings.py      → Finding data model, embed/text report builders
+risks.py         → Risk score calculator
+config.py        → .env and JSON config loader
+```
+
+---
 
 ## License
 
