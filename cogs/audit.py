@@ -33,11 +33,11 @@ class AuditCog(commands.Cog):
         findings, ran = await run_audit(guild, cfg)
         risks = calculate_risks(findings)
 
-        # サマリーEmbed（リスク評価のみ）
+        print(f"🔍 /audit 実行: {len(findings)}件のFinding")
+
         summary = build_summary_embed(guild.name, findings, ran, risks=risks)
         await interaction.followup.send(embed=summary)
 
-        # テキストレポートを送信（詳細はこれだけ）
         text_report = build_text_report(guild.name, findings, risks)
         if len(text_report) <= 2000:
             await interaction.followup.send(f"```\n{text_report}\n```")
@@ -48,11 +48,11 @@ class AuditCog(commands.Cog):
             )
             await interaction.followup.send(file=file)
 
-        # 修正可能な問題の件数を表示（/fix を使うよう案内）
         fixable_count = len([
             f for f in findings
             if f.auto_fixable and f.severity not in (Severity.LOW, Severity.INFO)
         ])
+        print(f"🔧 修正可能な問題: {fixable_count}件")
         if fixable_count > 0:
             await interaction.followup.send(
                 f"🔧 **{fixable_count}件**の問題は自動修正可能です。\n"
@@ -79,8 +79,7 @@ class AuditCog(commands.Cog):
         if not findings:
             await interaction.followup.send("公開チャンネルは見つかりませんでした（または全て非表示です）。")
             return
-        
-        # テキストレポートのみ送信
+
         text_report = build_text_report(guild.name, findings)
         if len(text_report) <= 2000:
             await interaction.followup.send(f"```\n{text_report}\n```")
@@ -110,8 +109,7 @@ class AuditCog(commands.Cog):
         if not findings:
             await interaction.followup.send("@everyone/@hereをメンションできる一般メンバーはいません。")
             return
-        
-        # テキストレポートのみ送信
+
         text_report = build_text_report(guild.name, findings)
         if len(text_report) <= 2000:
             await interaction.followup.send(f"```\n{text_report}\n```")
