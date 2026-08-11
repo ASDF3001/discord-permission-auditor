@@ -7,7 +7,6 @@ from findings import Finding, Severity
 
 
 class FixSelect(discord.ui.Select):
-    """修正する問題を選択するドロップダウン"""
     def __init__(self, findings: list, guild: discord.Guild):
         self.findings = findings
         self.guild = guild
@@ -35,7 +34,7 @@ class FixSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         selected_index = int(self.values[0])
         finding = self.findings[selected_index]
-
+        print(f"🔧 修正選択: {finding.severity.name} - {finding.title}")
         modal = FixConfirmModal(finding, self.guild)
         await interaction.response.send_modal(modal)
 
@@ -71,13 +70,14 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
         await interaction.response.defer(ephemeral=True)
 
         try:
+            print(f"🔧 修正実行開始: {self.finding.check}")
             success = await self._execute_fix()
             if success:
+                print(f"✅ 修正成功: {self.finding.check}")
                 await interaction.followup.send(
                     "✅ 修正が完了しました！",
                     ephemeral=True
                 )
-                # 再監査ボタンを表示
                 view = ReauditView(self.guild)
                 await interaction.followup.send(
                     "🔄 再監査を実行しますか？",
@@ -85,12 +85,14 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
                     ephemeral=True
                 )
             else:
+                print(f"❌ 修正失敗: {self.finding.check}")
                 await interaction.followup.send(
                     "❌ 修正に失敗しました。\n"
                     "権限が不足しているか、対象が既に変更されている可能性があります。",
                     ephemeral=True
                 )
         except Exception as e:
+            print(f"❌ 修正エラー: {e}")
             await interaction.followup.send(
                 f"❌ エラーが発生しました: {str(e)}",
                 ephemeral=True
@@ -111,6 +113,12 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
         check_id = self.finding.check
         guild = self.guild
 
+        # 権限チェック（Bot自身の権限）
+        me = guild.me
+        if not me.guild_permissions.manage_roles:
+            print("❌ Botに manage_roles 権限がありません")
+            return False
+
         if check_id == "everyone_excess":
             return await fix_everyone_permissions(guild, self.finding)
         elif check_id == "server_misconfig":
@@ -128,6 +136,7 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
             return await fix_stale_invite(guild, self.finding)
         elif check_id == "integration_webhooks":
             return await fix_orphaned_webhook(guild, self.finding)
+        print(f"❌ 未対応のチェック: {check_id}")
         return False
 
 
@@ -139,18 +148,18 @@ class ReauditView(discord.ui.View):
     @discord.ui.button(label="🔄 再監査する", style=discord.ButtonStyle.primary)
     async def reaudit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        
-        # 再監査実行
+        print("🔄 再監査実行")
+
         cfg = config.load_config()
         findings, ran = await run_audit(self.guild, cfg)
         risks = calculate_risks(findings)
 
-        # サマリー表示
+        print(f"🔍 再監査結果: {len(findings)}件")
+
         from findings import build_summary_embed
         summary = build_summary_embed(self.guild.name, findings, ran, risks=risks)
         await interaction.followup.send(embed=summary)
 
-        # 修正可能な件数表示
         fixable_count = len([
             f for f in findings
             if f.auto_fixable and f.severity not in (Severity.LOW, Severity.INFO)
@@ -189,10 +198,16 @@ class FixCog(commands.Cog):
         cfg = config.load_config()
         findings, _ = await run_audit(guild, cfg)
 
+        print(f"🔍 /fix: 全Finding {len(findings)}件")
+
         fixable = [
             f for f in findings
             if f.auto_fixable and f.severity not in (Severity.LOW, Severity.INFO)
         ]
+
+        print(f"🔧 修正可能: {len(fixable)}件")
+        for f in fixable:
+            print(f"  - {f.severity.name}: {f.title}")
 
         if not fixable:
             await interaction.followup.send(
