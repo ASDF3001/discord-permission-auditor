@@ -1,6 +1,7 @@
 # Discord Permission Auditor
 
 日本語版:[README_JP](README_JP.md)
+
 A small, dependency-light Discord bot that scans a server for permission gaps
 and misconfigurations, then reports them in Discord with a severity rating.
 
