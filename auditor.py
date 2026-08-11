@@ -78,36 +78,6 @@ async def check_everyone_excess(guild: discord.Guild, cfg, out: List[Finding]) -
             )
 
 
-async def check_external_bot_perms(guild: discord.Guild, cfg, out: List[Finding]) -> None:
-    for member in guild.members:
-        if not member.bot:
-            continue
-        if cfg.bot_ignored(member):
-            continue
-        is_external = member.id != guild.owner_id
-        for perm, sev in DANGEROUS_PERMS.items():
-            if getattr(member.guild_permissions, perm, False):
-                out.append(
-                    Finding(
-                        severity=sev if is_external else Severity.MEDIUM,
-                        check="external_bot_perms",
-                        title=f"Bot '{member.name}' が危険な権限 '{_perm_label(perm)}' を持っています",
-                        detail=f"Bot '{member.name}' に '{_perm_label(perm)}' が付与されています。",
-                        target=member.name,
-                        recommendation="このBotに本当にその権限が必要か確認してください。",
-                        description=f"Botに '{_perm_label(perm)}' があると、Botが乗っ取られた場合に悪用されるリスクがあります。",
-                        impact=f"悪意のある第三者がBotを操作すると、'{_perm_label(perm)}' を使ってサーバーに被害を与える可能性があります。",
-                        fix_steps=[
-                            "サーバー設定 > ロール を開く",
-                            f"Bot '{member.name}' のロールを選択",
-                            f"「{_perm_label(perm)}」のチェックを外す",
-                            "保存する"
-                        ],
-                        auto_fixable=False,
-                    )
-                )
-
-
 async def check_server_misconfig(guild: discord.Guild, cfg, out: List[Finding]) -> None:
     if guild.mfa_level == 0:
         out.append(
@@ -238,39 +208,6 @@ async def check_role_inheritance(guild: discord.Guild, cfg, out: List[Finding]) 
                             auto_fixable=True,
                         )
                     )
-
-
-async def check_external_bot_usable(guild: discord.Guild, cfg, out: List[Finding]) -> None:
-    if not guild.default_role.permissions.use_application_commands:
-        return
-    for member in guild.members:
-        if not member.bot or member.id == guild.owner_id:
-            continue
-        if cfg.bot_ignored(member):
-            continue
-        confined = any(
-            ch.permissions_for(member).use_application_commands is False
-            for ch in guild.channels
-        )
-        if not confined:
-            out.append(
-                Finding(
-                    severity=Severity.LOW,
-                    check="external_bot_usable",
-                    title=f"Bot '{member.name}' が全メンバーに使えます",
-                    detail=f"Bot '{member.name}' は誰でもスラッシュコマンドを実行できます。",
-                    target=member.name,
-                    recommendation="Botを特定のロール/チャンネルに制限してください。",
-                    description="誰でもBotを使えると、悪意のあるユーザーがBotを悪用する可能性があります。",
-                    impact="Botが危険な権限を持っている場合、誰でもその権限を間接的に使えることになります。",
-                    fix_steps=[
-                        "サーバー設定 > チャンネル を開く",
-                        "Botを制限したいチャンネルを選択",
-                        "「詳細な権限」からBotの「スラッシュコマンドを使用」をOFFにする",
-                    ],
-                    auto_fixable=False,
-                )
-            )
 
 
 async def check_everyone_visible(guild: discord.Guild, cfg, out: List[Finding]) -> None:
@@ -432,10 +369,8 @@ async def check_integration_webhooks(guild: discord.Guild, cfg, out: List[Findin
 ALL_CHECKS = [
     ("bot_perm_selfcheck", check_bot_self),
     ("everyone_excess", check_everyone_excess),
-    ("external_bot_perms", check_external_bot_perms),
     ("server_misconfig", check_server_misconfig),
     ("role_inheritance", check_role_inheritance),
-    ("external_bot_usable", check_external_bot_usable),
     ("everyone_visible", check_everyone_visible),
     ("mention_everyone", check_mention_everyone),
     ("stale_invites", check_stale_invites),
