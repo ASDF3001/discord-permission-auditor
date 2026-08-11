@@ -1,116 +1,94 @@
 # Discord Permission Auditor
 
-バックグラウンドタスク、データベース、外部通信は一切使用しません。  
-スラッシュコマンドを実行したときだけ監査を行うため、メモリとCPU使用量を最小限に抑えられます。
+軽量なDiscord Botです。サーバーの権限設定やセキュリティリスクをスキャンし、**初心者にもわかりやすく**報告します。
 
-## Features
+バックグラウンドタスク・データベース・外部APIは一切使用しません。  
+スラッシュコマンドを実行したときだけ動作するため、メモリとCPU使用量を最小限に抑えられます。
 
-- `@everyone` や外部Botが持つ危険な権限を検出
-- サーバー設定の問題を検出
-  - 2FA
-  - 認証レベル
-  - Webhook作成
-  - 招待作成
-- ロール継承による冗長な権限・権限漏れを検出
-- `@everyone` が閲覧できるチャンネルを一覧表示
-- 管理者権限を持たないメンバーのうち、`@everyone` / `@here` をメンションできるユーザーを検出
-- 古い招待リンクを検出
-- 孤立したWebhookを検出
-- JSON設定ファイルによるチェック項目の個別有効化・無効化
-- ロール・チャンネル・Botのホワイトリストに対応
-- 検出結果を重大度別に分類
+---
 
-## Setup
+## 機能
 
-### Requirements
+- 🔍 **総合監査** – `@everyone`、Bot、ロール、チャンネル、招待、Webhookなどをチェック
+- 🛡️ **リスク評価** – Raid / Nuke / 外部攻撃 の3つのリスクを算出
+- 📋 **わかりやすい説明** – 各問題に「何が悪いか」「なぜ危険か」「どう直すか」を表示
+- 🔧 **ワンクリック修正** – 多くの問題を管理者がボタン一つで安全に修正可能
+- 📄 **コピー用テキストレポート** – プレーンテキストで結果を簡単に共有・保存
+- ⚙️ **設定可能** – JSONファイルでチェックのON/OFFやホワイトリストを指定
+- 🚀 **軽量** – DB不要、常駐処理なし、外部APIなし
 
-- Python 3.10+
-- Discord Bot
+---
 
-### Installation
+## セットアップ
 
-```bash
+Python 3.10+ が必要です。
+
+```
 python -m venv .venv
-```
-
-Linux / macOS:
-
-```bash
-source .venv/bin/activate
-```
-
-Windows:
-
-```powershell
-.venv\Scripts\activate
-```
-
-依存関係をインストールします。
-
-```bash
+source .venv/bin/activate   # Windowsの場合: .venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-`.env.example` をコピーして `.env` を作成します。
-
-```bash
 cp .env.example .env
 ```
 
-Windowsの場合は、`.env.example` をコピーして `.env` を作成してください。
+`.env` を編集して以下を設定します：
 
-### Environment Variables
+| 変数 | 説明 |
+|------|------|
+| `DISCORD_TOKEN` | Discord Developer Portal で取得したBotトークン。**必須** |
+| `GUILD_ID` | コマンドを同期するサーバーID。任意（省略時はグローバル） |
+| `CONFIG_FILE` | オプションのJSON設定ファイルへのパス。任意 |
 
-`.env` に以下を設定します。
+Botには最低限以下の権限を付与してください：
 
-| Variable | Description |
-|---|---|
-| `DISCORD_TOKEN` | Discord Developer Portalで取得したBotトークン。必須 |
-| `GUILD_ID` | スラッシュコマンドを同期するサーバーID。任意 |
-| `CONFIG_FILE` | 任意のJSON設定ファイルへのパス。任意 |
+- 監査ログを表示
+- ロールの管理（ロール階層の正確な読み取り用）
+- メッセージを読む / チャンネルを見る
+- Webhookの管理（Webhookチェック用）
+- サーバーの管理（招待チェック用）
 
-`GUILD_ID` を指定しない場合、コマンドはグローバルコマンドとして登録されます。
+起動：
 
-## Bot Permissions
-
-Botには最低限、以下の権限を付与してください。
-
-- View Audit Log
-- Manage Roles
-- Read Messages / View Channels
-- Manage Webhooks
-- Manage Server
-
-`Manage Roles` は、ロールの順位や権限継承を正確に確認するために使用します。
-
-`Manage Webhooks` はWebhook監査に、`Manage Server` は招待監査に使用します。
-
-## Run
-
-```bash
-python bot.py
+```
+python main.py
 ```
 
-## Commands
+---
 
-| Command | Description |
-|---|---|
-| `/audit` | 有効になっているすべての監査項目を実行 |
-| `/audit-channel` | `@everyone` が閲覧できるチャンネルを一覧表示 |
+## コマンド
+
+全コマンドは **管理者限定** で、応答は **Ephemeral（実行者のみ閲覧可能）** です。
+
+| コマンド | 説明 |
+|----------|------|
+| `/audit` | 全チェックを実行 – リスクサマリー・詳細・修正ボタンを表示 |
+| `/audit-channel` | `@everyone` が読めるチャンネルを一覧表示 |
 | `/audit-mention` | `@everyone` / `@here` をメンションできる非管理者メンバーを一覧表示 |
-| `/audit-help` | 監査項目と設定方法を表示 |
+| `/audit-help` | チェック一覧と設定方法を表示 |
+| `/audit-fix` | （開発中）手動で特定の問題を修正。当面は `/audit` の修正ボタンを使用 |
 
-## Configuration
+---
 
-`.env` に以下を設定すると、JSON設定ファイルを使用できます。
+## リスク評価
 
-```env
-CONFIG_FILE=config.json
+`/audit` 実行時、以下の3つのリスクレベルを算出します：
+
+| リスク | 意味 |
+|--------|------|
+| **Raidリスク** | 大量参加攻撃やスパムに対する脆弱性 |
+| **Nukeリスク** | 悪意のあるユーザー/Botがチャンネル・ロール・設定を破壊する容易さ |
+| **外部攻撃リスク** | 新規メンバーや未信頼メンバーからの脅威に対する露出度 |
+
+各リスクは `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `INFO` で評価されます。
+
+---
+
+## オプション設定ファイル
+
+`.env` に `CONFIG_FILE=config.json` を設定すると、JSON設定ファイルが使用できます。
+
+例：
+
 ```
-
-### Example
-
-```json
 {
   "enabled": [
     "everyone_excess",
@@ -124,94 +102,80 @@ CONFIG_FILE=config.json
     "owner_admin_roles",
     "integration_webhooks"
   ],
-  "whitelist_roles": [
-    "Staff",
-    "123456789012345678"
-  ],
-  "whitelist_channels": [
-    "secret-logs",
-    "987654321098765432"
-  ],
-  "whitelist_bots": [
-    "TrustedBot",
-    "111222333444555666"
-  ]
+  "whitelist_roles": ["スタッフ", "123456789012345678"],
+  "whitelist_channels": ["秘密ログ", "987654321098765432"],
+  "whitelist_bots": ["信頼できるBot", "111222333444555666"]
 }
 ```
 
-### `enabled`
+- `enabled` – 実行するチェックIDのリスト。省略すると全チェック実行
+- `whitelist_*` – 監査対象外にするロール・チャンネル・BotのIDまたは名前
 
-実行する監査項目を指定します。
+利用可能なチェックID：
 
-| Check ID | Description |
-|---|---|
+| ID | 説明 |
+|----|------|
 | `everyone_excess` | `@everyone` の危険な権限 |
 | `external_bot_perms` | 外部Botの危険な権限 |
-| `server_misconfig` | サーバー設定の問題 |
-| `role_inheritance` | ロール継承による権限問題 |
-| `external_bot_usable` | 外部Botの実効権限 |
-| `everyone_visible` | `@everyone` が閲覧できるチャンネル |
-| `mention_everyone` | `@everyone` / `@here` メンション権限 |
-| `stale_invites` | 古い招待リンク |
-| `owner_admin_roles` | サーバー所有者・管理者ロールの確認 |
-| `integration_webhooks` | Webhook関連の問題 |
+| `server_misconfig` | 2FA・認証レベル・招待/Webhook作成設定 |
+| `role_inheritance` | ロール階層による冗長・漏洩権限 |
+| `external_bot_usable` | 誰でも使える外部Bot |
+| `everyone_visible` | `@everyone` が読めるチャンネル |
+| `mention_everyone` | `@everyone` / `@here` メンションできる非管理者メンバー |
+| `stale_invites` | 期限切れしない招待リンク |
+| `owner_admin_roles` | サーバーオーナー以外の管理者ロール保持者 |
+| `integration_webhooks` | 作成者が退去した孤立Webhook |
 
-`enabled` を省略した場合、すべての監査項目が実行されます。
+---
 
-### Whitelists
+## 自動修正
 
-特定のロール、チャンネル、Botを監査対象から除外できます。
+`/audit` 実行時、修正可能な問題には **🔧 修正** ボタンが表示されます。
 
-#### `whitelist_roles`
+ボタンをクリックすると確認モーダルが開き、具体的な変更内容が表示されます。  
+確認後、Botが修正を適用し、再監査を提案します。
 
-ロール名またはロールIDを指定します。
+**現在修正可能な問題：**
 
-#### `whitelist_channels`
+- `@everyone` から危険な権限を削除
+- `@everyone` の招待作成権限を無効化
+- `@everyone` のWebhook管理権限を無効化
+- 下位ロールから冗長な権限を削除
+- `@everyone` のチャンネル可視性を制限
+- 非管理者ロールから `@everyone` / `@here` メンション権限を削除
+- 期限切れしない招待リンクを削除
+- 孤立したWebhookを削除
 
-チャンネル名またはチャンネルIDを指定します。
+> ⚠️ Botは **ユーザーの明示的な確認なしに** 変更を実行することはありません。
 
-#### `whitelist_bots`
+---
 
-Bot名またはBot IDを指定します。
+## 重大度レベル
 
-## Severity Levels
+問題は以下の5段階で分類されます：
 
-監査結果は以下の5段階で分類されます。
+`CRITICAL > HIGH > MEDIUM > LOW > INFO`
 
-```text
-CRITICAL > HIGH > MEDIUM > LOW > INFO
+サマリーEmbedの色は、検出された最悪の重大度を反映します。
+
+---
+
+## アーキテクチャ
+
+```
+main.py          → エントリーポイント、Cogを読み込み
+cogs/
+  ├── audit.py   → /audit, /audit-channel, /audit-mention
+  ├── help.py    → /audit-help
+  └── fix.py     → 修正ボタンと /audit-fix（WIP）
+auditor.py       → 監査ロジックと修正関数
+findings.py      → Findingデータモデル、Embed/テキストレポート生成
+risks.py         → リスクスコア計算
+config.py        → .env と JSON設定読み込み
 ```
 
-サマリーには、検出された中で最も高い重大度が反映されます。
+---
 
-## Design Philosophy
+## ライセンス
 
-このBotは、Discordサーバーの権限設定を**監査・可視化すること**を目的としています。
-
-権限を自動的に変更するのではなく、問題を検出して管理者に知らせることを基本方針としています。
-
-### Principles
-
-- Background tasksなし
-- Databaseなし
-- External APIへの通信なし
-- 監査はコマンド実行時のみ
-- 設定はローカルのJSONファイル
-- 権限変更を自動実行しない
-- 軽量な動作
-- 明確な重大度表示
-
-「危険な権限がある」という結果だけではなく、
-
-- どの権限なのか
-- 誰が持っているのか
-- どのロールから継承されているのか
-- なぜ問題なのか
-
-を確認できることを重視しています。
-
-## License
-
-MIT License
-
-詳細は `LICENSE` を参照してください。
+MIT License. 詳細は [LICENSE](LICENSE) を参照。
