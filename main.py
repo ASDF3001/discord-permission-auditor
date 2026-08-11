@@ -15,22 +15,28 @@ async def load_cogs():
 
 @bot.event
 async def on_ready():
-    if config.GUILD_ID:
-        guild = discord.Object(id=config.GUILD_ID)
-        bot.tree.copy_global_to(guild=guild)
-        await bot.tree.sync(guild=guild)
-    else:
-        await bot.tree.sync()
-    print(f"Ready as {bot.user} (synced commands)")
-    
-    # 登録されてるコマンド一覧を表示
+    print(f"Logged in as {bot.user}")
+    # 登録されてるコマンドを確認（デバッグ用）
     cmds = await bot.tree.fetch_commands()
-    print("登録済みコマンド:", [c.name for c in cmds])
+    print(f"現在の登録コマンド: {[c.name for c in cmds]}")
 
-def main():
-    if not config.DISCORD_TOKEN:
-        raise SystemExit("DISCORD_TOKEN is not set. Copy .env.example to .env and fill it in.")
-    bot.run(config.DISCORD_TOKEN)
+async def main():
+    async with bot:
+        # cogsを読み込んでから同期
+        await load_cogs()
+        
+        if config.GUILD_ID:
+            guild = discord.Object(id=config.GUILD_ID)
+            bot.tree.copy_global_to(guild=guild)
+            await bot.tree.sync(guild=guild)
+        else:
+            await bot.tree.sync()
+        
+        print("コマンド同期完了")
+        await bot.start(config.DISCORD_TOKEN)
 
 if __name__ == "__main__":
-    main()
+    if not config.DISCORD_TOKEN:
+        raise SystemExit("DISCORD_TOKEN is not set.")
+    import asyncio
+    asyncio.run(main())
