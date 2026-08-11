@@ -3,13 +3,13 @@ from discord import app_commands
 from discord.ext import commands
 import config
 from auditor import check_everyone_visible, check_mention_everyone, run_audit
-from findings import build_detail_embeds, build_summary_embed
+from findings import build_detail_embeds, build_summary_embed, build_text_report
+from risks import calculate_risks
 
 class AuditCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # 管理者限定 + Ephemeral はデコレータとコード両方でチェック
     @app_commands.command(name="audit", description="Audit this server's permission gaps.")
     @app_commands.default_permissions(administrator=True)
     async def audit_all(self, interaction: discord.Interaction):
@@ -25,8 +25,21 @@ class AuditCog(commands.Cog):
         await interaction.response.send_message("スキャン中…少々お待ちください。", ephemeral=True)
         cfg = config.load_config()
         findings, ran = await run_audit(guild, cfg)
-        summary = build_summary_embed(guild.name, findings, ran)
+        risks = calculate_risks(findings)
+        
+        # サマリー（リスク情報付き）
+        summary = build_summary_embed(guild.name, findings, ran, risks=risks)
         await interaction.followup.send(embed=summary)
+        
+        # テキストレポートも送信（コピー用）
+        text_report = build_text_report(guild.name, findings, risks)
+        if len(text_report) <= 2000:
+            await interaction.followup.send(f"```\n{text_report}\n```")
+        else:
+            # 長すぎる場合は分割 or ファイルで送信
+            await interaction.followup.send("テキストレポートが長すぎるため、詳細はEmbedをご覧ください。")
+        
+        # 詳細Embed
         details = build_detail_embeds(findings)
         for emb in details:
             await interaction.followup.send(embed=emb)
