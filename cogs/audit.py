@@ -7,10 +7,8 @@ from findings import (
     build_detail_embeds,
     build_summary_embed,
     build_text_report,
-    Severity,
 )
 from risks import calculate_risks
-from cogs.fix import FixView
 
 
 class AuditCog(commands.Cog):
@@ -42,63 +40,26 @@ class AuditCog(commands.Cog):
         if len(text_report) <= 2000:
             await interaction.followup.send(f"```\n{text_report}\n```")
         else:
-            # テキストファイルとして送信
             file = discord.File(
                 fp=discord.BytesIO(text_report.encode("utf-8")),
                 filename="audit_report.txt",
             )
             await interaction.followup.send(file=file)
 
+        # 詳細Embed
         details = build_detail_embeds(findings)
         for emb in details:
             await interaction.followup.send(embed=emb)
 
-        # 自動修正ボタン（LOW / INFO は除外）
-        fixable = [
+        # 修正可能な問題の件数を表示（/fix を使うよう案内）
+        fixable_count = len([
             f for f in findings
             if f.auto_fixable and f.severity not in (Severity.LOW, Severity.INFO)
-        ][:5]
-
-        if fixable:
-            view = discord.ui.View(timeout=120)
-            for i, f in enumerate(fixable):
-                label = f"🔧 {f.title[:20]}"
-                if len(f.title) > 20:
-                    label += "…"
-
-                button = discord.ui.Button(
-                    label=label,
-                    style=discord.ButtonStyle.primary,
-                    custom_id=f"fix_{i}_{f.check}"
-                )
-
-                async def button_callback(interaction: discord.Interaction, f=f):
-                    view = FixView(f, guild, self)
-                    await interaction.response.send_message(
-                        f"**{f.title}** を修正しますか？\n"
-                        "以下のボタンをクリックして確認画面に進んでください。",
-                        view=view,
-                        ephemeral=True
-                    )
-
-                button.callback = button_callback
-                view.add_item(button)
-
-            total_fixable = len([f for f in findings if f.auto_fixable and f.severity not in (Severity.LOW, Severity.INFO)])
-            footer_text = f"修正可能な問題: {total_fixable}件中 {len(fixable)}件を表示"
-            if total_fixable > 5:
-                footer_text += "（残りは /audit-fix コマンドで）"
-
+        ])
+        if fixable_count > 0:
             await interaction.followup.send(
-                f"🔧 **自動修正可能な問題があります**\n"
-                f"{footer_text}\n"
-                "ボタンをクリックして修正を開始してください。",
-                view=view,
-                ephemeral=True
-            )
-        else:
-            await interaction.followup.send(
-                "✅ 自動修正可能な問題はありません。",
+                f"🔧 **{fixable_count}件**の問題は自動修正可能です。\n"
+                "修正する場合は `/fix` コマンドを実行してください。",
                 ephemeral=True
             )
 
