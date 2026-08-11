@@ -18,31 +18,6 @@ SEVERITY_COLOR = {
     "INFO": 0x566573,      # grey
 }
 
-# 日本語での説明テンプレート（後でauditor.pyで使う）
-PERMISSION_EXPLANATIONS = {
-    "administrator": {
-        "description": "サーバー上の全ての設定を変更できる権限です。",
-        "impact": "この権限を持つアカウントが乗っ取られると、サーバー全体が完全に破壊される可能性があります。",
-        "recommendation": "本当に必要な管理者のみに付与し、定期的に見直してください。",
-        "fix_steps": [
-            "サーバー設定 > ロール を開く",
-            "該当ロールの「管理者」チェックを外す",
-            "保存する"
-        ]
-    },
-    "manage_roles": {
-        "description": "ロールの作成・編集・削除ができる権限です。",
-        "impact": "この権限を持つユーザーは、自分より上位のロール以外を自由に変更できます。悪用されると、自分自身に管理者権限を付与される可能性があります。",
-        "recommendation": "ロール管理が必要な担当者に限定して付与してください。",
-        "fix_steps": [
-            "サーバー設定 > ロール を開く",
-            "該当ロールの「ロールの管理」チェックを外す",
-            "保存する"
-        ]
-    },
-    # ... 他の権限も同様に定義
-}
-
 class Severity(IntEnum):
     CRITICAL = 4
     HIGH = 3
@@ -54,10 +29,10 @@ class Severity(IntEnum):
 @dataclass
 class Finding:
     severity: Severity
-    check: str
-    title: str
-    detail: str
-    target: str = ""
+    check: str          # check id, e.g. "everyone_excess"
+    title: str          # short label
+    detail: str         # what was found
+    target: str = ""    # role / channel / member name
     recommendation: str = ""
     # 新規フィールド
     description: str = ""           # 何が問題か（平易な説明）
@@ -106,7 +81,6 @@ def build_summary_embed(guild_name: str, findings: List[Finding], scanned: int, 
         color=color,
     )
 
-    # Risk情報を追加（あれば）
     if risks:
         risk_text = (
             f"🛡️ **総合リスク評価**\n"
@@ -132,7 +106,6 @@ def build_detail_embeds(findings: List[Finding], per_embed: int = 10) -> List[di
             if f.target:
                 name += f" - {f.target}"
             
-            # 説明を強化
             body = f"**問題**: {f.description or f.detail}\n"
             if f.impact:
                 body += f"**影響**: {f.impact}\n"
@@ -175,7 +148,6 @@ def build_text_report(guild_name: str, findings: List[Finding], risks: dict = No
         lines.append("✅ 問題は検出されませんでした。")
         return "\n".join(lines)
 
-    # Severityごとにグループ化
     for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]:
         items = [f for f in sort_findings(findings) if f.severity.name == severity]
         if not items:
