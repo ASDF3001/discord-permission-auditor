@@ -11,6 +11,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def load_cogs():
     await bot.load_extension("cogs.audit")
     await bot.load_extension("cogs.help")
+    await bot.load_extension("cogs.fix")
 
 @bot.event
 async def on_ready():
