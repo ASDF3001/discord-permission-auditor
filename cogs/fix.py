@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import config
 from auditor import run_audit
-from findings import Severity,Finding
+from findings import Finding, Severity
 
 
 class FixSelect(discord.ui.Select):
@@ -13,7 +13,7 @@ class FixSelect(discord.ui.Select):
         self.guild = guild
 
         options = []
-        for i, f in enumerate(findings[:10]):  # 最大10件まで
+        for i, f in enumerate(findings[:10]):
             label = f"{f.severity.name}: {f.title[:30]}"
             if len(label) > 50:
                 label = label[:47] + "..."
@@ -36,7 +36,6 @@ class FixSelect(discord.ui.Select):
         selected_index = int(self.values[0])
         finding = self.findings[selected_index]
 
-        # 確認モーダルを表示
         modal = FixConfirmModal(finding, self.guild)
         await interaction.response.send_modal(modal)
 
@@ -75,10 +74,10 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
             success = await self._execute_fix()
             if success:
                 await interaction.followup.send(
-                    "✅ 修正が完了しました！\n"
-                    "再監査を実行して確認してください。",
+                    "✅ 修正が完了しました！",
                     ephemeral=True
                 )
+                # 再監査ボタンを表示
                 view = ReauditView(self.guild)
                 await interaction.followup.send(
                     "🔄 再監査を実行しますか？",
@@ -139,11 +138,34 @@ class ReauditView(discord.ui.View):
 
     @discord.ui.button(label="🔄 再監査する", style=discord.ButtonStyle.primary)
     async def reaudit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "再監査は `/audit` コマンドを手動で実行してください。\n"
-            "（自動再実行は現在開発中です）",
-            ephemeral=True
-        )
+        await interaction.response.defer(ephemeral=True)
+        
+        # 再監査実行
+        cfg = config.load_config()
+        findings, ran = await run_audit(self.guild, cfg)
+        risks = calculate_risks(findings)
+
+        # サマリー表示
+        from findings import build_summary_embed
+        summary = build_summary_embed(self.guild.name, findings, ran, risks=risks)
+        await interaction.followup.send(embed=summary)
+
+        # 修正可能な件数表示
+        fixable_count = len([
+            f for f in findings
+            if f.auto_fixable and f.severity not in (Severity.LOW, Severity.INFO)
+        ])
+        if fixable_count > 0:
+            await interaction.followup.send(
+                f"🔧 **{fixable_count}件**の問題が自動修正可能です。\n"
+                "修正する場合は `/fix` コマンドを実行してください。",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                "✅ 自動修正可能な問題はありません。",
+                ephemeral=True
+            )
 
 
 class FixCog(commands.Cog):
@@ -167,7 +189,6 @@ class FixCog(commands.Cog):
         cfg = config.load_config()
         findings, _ = await run_audit(guild, cfg)
 
-        # 修正可能なものだけを抽出（LOW/INFOは除外）
         fixable = [
             f for f in findings
             if f.auto_fixable and f.severity not in (Severity.LOW, Severity.INFO)
@@ -180,7 +201,6 @@ class FixCog(commands.Cog):
             )
             return
 
-        # 選択メニューを表示
         view = discord.ui.View()
         select = FixSelect(fixable, guild)
         view.add_item(select)
