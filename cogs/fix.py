@@ -6,7 +6,6 @@ from findings import Finding
 
 
 class FixView(discord.ui.View):
-    """個別のFindingに対応する修正ボタン"""
     def __init__(self, finding: Finding, guild: discord.Guild, cog: commands.Cog):
         super().__init__(timeout=120)
         self.finding = finding
@@ -19,19 +18,16 @@ class FixView(discord.ui.View):
             await interaction.response.send_message("管理者権限がありません。", ephemeral=True)
             return
 
-        # 確認モーダルを表示
         modal = FixConfirmModal(self.finding, self.guild)
         await interaction.response.send_modal(modal)
 
 
 class FixConfirmModal(discord.ui.Modal, title="修正確認"):
-    """修正内容を確認するモーダル"""
     def __init__(self, finding: Finding, guild: discord.Guild):
         super().__init__()
         self.finding = finding
         self.guild = guild
 
-        # 修正内容説明（読み取り専用）
         self.info = discord.ui.TextInput(
             label="以下の修正を実行します",
             style=discord.TextStyle.paragraph,
@@ -57,7 +53,6 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
         await interaction.response.defer(ephemeral=True)
 
         try:
-            # 修正実行
             success = await self._execute_fix()
             if success:
                 await interaction.followup.send(
@@ -65,7 +60,6 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
                     "再監査を実行して確認してください。",
                     ephemeral=True
                 )
-                # 再監査ボタン
                 view = ReauditView(self.guild)
                 await interaction.followup.send(
                     "🔄 再監査を実行しますか？",
@@ -85,7 +79,6 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
             )
 
     async def _execute_fix(self) -> bool:
-        """実際の修正処理を呼び出す"""
         check_id = self.finding.check
         guild = self.guild
 
@@ -110,18 +103,13 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
 
 
 class ReauditView(discord.ui.View):
-    """再監査実行ボタン"""
     def __init__(self, guild: discord.Guild):
         super().__init__(timeout=60)
         self.guild = guild
 
     @discord.ui.button(label="🔄 再監査する", style=discord.ButtonStyle.primary)
     async def reaudit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 直接監査を再実行（簡易版）
-        await interaction.response.send_message("再監査を実行中...", ephemeral=True)
-        # 実際は /audit の処理を再実行するのが理想だけど、
-        # ここでは簡易的に「/audit を実行してください」と案内
-        await interaction.followup.send(
+        await interaction.response.send_message(
             "再監査は `/audit` コマンドを手動で実行してください。\n"
             "（自動再実行は現在開発中です）",
             ephemeral=True
