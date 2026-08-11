@@ -3,8 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import config
 from auditor import run_audit
-from findings import Severity
-import Finding
+from findings import Severity,Finding
 
 
 class FixSelect(discord.ui.Select):
