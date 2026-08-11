@@ -4,6 +4,7 @@ from discord.ext import commands
 import config
 from auditor import run_audit
 from findings import Severity
+import Finding
 
 
 class FixSelect(discord.ui.Select):
