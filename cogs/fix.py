@@ -1,24 +1,43 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-import auditor
-from findings import Finding
+import config
+from auditor import run_audit
+from findings import Severity
 
 
-class FixView(discord.ui.View):
-    def __init__(self, finding: Finding, guild: discord.Guild, cog: commands.Cog):
-        super().__init__(timeout=120)
-        self.finding = finding
+class FixSelect(discord.ui.Select):
+    """修正する問題を選択するドロップダウン"""
+    def __init__(self, findings: list, guild: discord.Guild):
+        self.findings = findings
         self.guild = guild
-        self.cog = cog
 
-    @discord.ui.button(label="🔧 修正する", style=discord.ButtonStyle.success)
-    async def fix_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("管理者権限がありません。", ephemeral=True)
-            return
+        options = []
+        for i, f in enumerate(findings[:10]):  # 最大10件まで
+            label = f"{f.severity.name}: {f.title[:30]}"
+            if len(label) > 50:
+                label = label[:47] + "..."
+            options.append(
+                discord.SelectOption(
+                    label=label,
+                    value=str(i),
+                    description=f"対象: {f.target or 'サーバー全体'}"
+                )
+            )
 
-        modal = FixConfirmModal(self.finding, self.guild)
+        super().__init__(
+            placeholder="修正する問題を選択してください",
+            options=options,
+            max_values=1,
+            min_values=1,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_index = int(self.values[0])
+        finding = self.findings[selected_index]
+
+        # 確認モーダルを表示
+        modal = FixConfirmModal(finding, self.guild)
         await interaction.response.send_modal(modal)
 
 
@@ -79,26 +98,37 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
             )
 
     async def _execute_fix(self) -> bool:
+        from auditor import (
+            fix_everyone_permissions,
+            fix_invite_permission,
+            fix_webhook_permission,
+            fix_redundant_permission,
+            fix_channel_visibility,
+            fix_mention_permission,
+            fix_stale_invite,
+            fix_orphaned_webhook,
+        )
+
         check_id = self.finding.check
         guild = self.guild
 
         if check_id == "everyone_excess":
-            return await auditor.fix_everyone_permissions(guild, self.finding)
+            return await fix_everyone_permissions(guild, self.finding)
         elif check_id == "server_misconfig":
             if "招待" in self.finding.title:
-                return await auditor.fix_invite_permission(guild)
+                return await fix_invite_permission(guild)
             elif "Webhook" in self.finding.title:
-                return await auditor.fix_webhook_permission(guild)
+                return await fix_webhook_permission(guild)
         elif check_id == "role_inheritance":
-            return await auditor.fix_redundant_permission(guild, self.finding)
+            return await fix_redundant_permission(guild, self.finding)
         elif check_id == "everyone_visible":
-            return await auditor.fix_channel_visibility(guild, self.finding)
+            return await fix_channel_visibility(guild, self.finding)
         elif check_id == "mention_everyone":
-            return await auditor.fix_mention_permission(guild, self.finding)
+            return await fix_mention_permission(guild, self.finding)
         elif check_id == "stale_invites":
-            return await auditor.fix_stale_invite(guild, self.finding)
+            return await fix_stale_invite(guild, self.finding)
         elif check_id == "integration_webhooks":
-            return await auditor.fix_orphaned_webhook(guild, self.finding)
+            return await fix_orphaned_webhook(guild, self.finding)
         return False
 
 
@@ -120,16 +150,45 @@ class FixCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="audit-fix", description="特定の問題を自動修正します（開発中）")
+    @app_commands.command(name="fix", description="自動修正可能な問題を表示して修正します")
     @app_commands.default_permissions(administrator=True)
-    async def audit_fix(self, interaction: discord.Interaction):
+    async def fix(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.administrator:
             await interaction.response.send_message("管理者権限がありません。", ephemeral=True)
             return
 
-        await interaction.response.send_message(
-            "このコマンドは現在開発中です。\n"
-            "通常の `/audit` で表示される「修正」ボタンを使ってください。",
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
+            return
+
+        await interaction.response.send_message("監査を実行中…少々お待ちください。", ephemeral=True)
+
+        cfg = config.load_config()
+        findings, _ = await run_audit(guild, cfg)
+
+        # 修正可能なものだけを抽出（LOW/INFOは除外）
+        fixable = [
+            f for f in findings
+            if f.auto_fixable and f.severity not in (Severity.LOW, Severity.INFO)
+        ]
+
+        if not fixable:
+            await interaction.followup.send(
+                "✅ 自動修正可能な問題はありません。",
+                ephemeral=True
+            )
+            return
+
+        # 選択メニューを表示
+        view = discord.ui.View()
+        select = FixSelect(fixable, guild)
+        view.add_item(select)
+
+        await interaction.followup.send(
+            f"🔧 **{len(fixable)}件**の問題が自動修正可能です。\n"
+            "修正する問題を選択してください。",
+            view=view,
             ephemeral=True
         )
 
