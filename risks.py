@@ -9,7 +9,6 @@ from findings import Finding, Severity
 # 各チェックタイプがどのリスクに影響するか
 RISK_MAPPING = {
     "everyone_excess": {"raid": 3, "nuke": 2, "external": 3},
-    "external_bot_perms": {"raid": 1, "nuke": 3, "external": 1},
     "server_misconfig": {"raid": 2, "nuke": 1, "external": 2},
     "role_inheritance": {"raid": 2, "nuke": 2, "external": 1},
     "external_bot_usable": {"raid": 2, "nuke": 1, "external": 1},

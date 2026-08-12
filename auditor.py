@@ -274,6 +274,57 @@ async def check_mention_everyone(guild: discord.Guild, cfg, out: List[Finding]) 
         )
 
 
+async def check_external_bot_usable(guild: discord.Guild, cfg, out: List[Finding]) -> None:
+    """Find roles/channel overwrites that allow user-installed apps to post publicly."""
+    for role in guild.roles:
+        if cfg.role_ignored(role) or not getattr(role.permissions, "use_external_apps", False):
+            continue
+        out.append(
+            Finding(
+                severity=Severity.HIGH,
+                check="external_bot_usable",
+                title=f"ロール '{role.name}' がユーザーインストールBotを使用できます",
+                detail=f"ロール '{role.name}' に「外部アプリを使用」権限があります。",
+                target=role.name,
+                recommendation="一般メンバーのロールから「外部アプリを使用」を無効にしてください。",
+                description="ユーザーインストール型アプリがチャンネルに公開メッセージを投稿できます。",
+                impact="荒らし用アプリによるスパムや偽装メッセージのリスクが高まります。",
+                fix_steps=[
+                    "サーバー設定 > ロール > Apps Permissions を開く",
+                    f"ロール '{role.name}' を選択",
+                    "「外部アプリを使用」をOFFにする",
+                    "保存する",
+                ],
+                auto_fixable=not role.managed,
+            )
+        )
+
+    for channel in guild.channels:
+        if cfg.channel_ignored(channel):
+            continue
+        overwrite = channel.overwrites_for(guild.default_role)
+        if getattr(overwrite, "use_external_apps", None) is True:
+            out.append(
+                Finding(
+                    severity=Severity.HIGH,
+                    check="external_bot_usable",
+                    title=f"チャンネル #{getattr(channel, 'name', channel)} で外部アプリが許可されています",
+                    detail="@everyone のチャンネル権限で「外部アプリを使用」が許可されています。",
+                    target=f"#{getattr(channel, 'name', str(channel))}",
+                    recommendation="このチャンネルの @everyone から「外部アプリを使用」を削除してください。",
+                    description="チャンネル単位の上書きにより、ユーザーインストール型アプリが公開投稿できます。",
+                    impact="サーバー全体設定を無効にしていても、このチャンネルでは荒らし投稿が可能になります。",
+                    fix_steps=[
+                        "チャンネルを右クリック > チャンネルを編集",
+                        "権限 > @everyone を開く",
+                        "「外部アプリを使用」をリセットまたはOFFにする",
+                        "保存する",
+                    ],
+                    auto_fixable=True,
+                )
+            )
+
+
 async def check_stale_invites(guild: discord.Guild, cfg, out: List[Finding]) -> None:
     if not guild.me or not guild.me.guild_permissions.manage_guild:
         return
@@ -373,6 +424,7 @@ ALL_CHECKS = [
     ("role_inheritance", check_role_inheritance),
     ("everyone_visible", check_everyone_visible),
     ("mention_everyone", check_mention_everyone),
+    ("external_bot_usable", check_external_bot_usable),
     ("stale_invites", check_stale_invites),
     ("owner_admin_roles", check_owner_admin_roles),
     ("integration_webhooks", check_integration_webhooks),
@@ -518,6 +570,30 @@ async def fix_mention_permission(guild: discord.Guild, finding: Finding) -> bool
                     success = False
         return success
     except Exception:
+        return False
+
+
+async def fix_external_bot_usable(guild: discord.Guild, finding: Finding) -> bool:
+    """Disable public use of user-installed apps for a role or @everyone channel overwrite."""
+    try:
+        if finding.target and finding.target.startswith("#"):
+            channel_name = finding.target[1:]
+            channel = discord.utils.get(guild.channels, name=channel_name)
+            if not channel:
+                return False
+            await channel.set_permissions(guild.default_role, use_external_apps=False)
+            return True
+
+        role = discord.utils.get(guild.roles, name=finding.target)
+        if not role or role.managed:
+            return False
+        perms = role.permissions
+        if not hasattr(perms, "use_external_apps"):
+            return False
+        perms.use_external_apps = False
+        await role.edit(permissions=perms)
+        return True
+    except (discord.Forbidden, discord.HTTPException):
         return False
 
 

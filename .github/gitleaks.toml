@@ -1,0 +1,14 @@
+title = "gitpush default"
+
+[[rules]]
+id = "github-token"
+description = "GitHub Personal Access Token"
+regex = '''ghp_[A-Za-z0-9]{20,}'''
+[[rules]]
+id = "github-pat"
+description = "GitHub Fine-grained PAT"
+regex = '''github_pat_[A-Za-z0-9_]{20,}'''
+[[rules]]
+id = "aws-key"
+description = "AWS Access Key"
+regex = '''AKIA[0-9A-Z]{16}'''

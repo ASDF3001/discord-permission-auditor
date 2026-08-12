@@ -20,10 +20,9 @@ class HelpCog(commands.Cog):
         )
         checks = [
             ("everyone_excess", "@everyone が危険な権限を持っている"),
-            ("external_bot_perms", "外部Botが危険な権限を持っている"),
             ("server_misconfig", "2FA無効・認証ゲートなし・招待/Webhook作成が自由"),
             ("role_inheritance", "下位ロールが過剰な権限を継承している"),
-            ("external_bot_usable", "外部Botが一般メンバーにも使える"),
+            ("external_bot_usable", "ユーザーインストールBot/外部アプリを一般メンバーが公開使用できる"),
             ("everyone_visible", "@everyone が読めるチャンネル"),
             ("mention_everyone", "@everyone/@hereをメンションできる一般メンバー"),
             ("stale_invites", "期限切れしない招待リンク"),

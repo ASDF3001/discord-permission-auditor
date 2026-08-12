@@ -4,6 +4,7 @@ from discord.ext import commands
 import config
 from auditor import run_audit
 from findings import Finding, Severity
+from risks import calculate_risks
 
 
 class FixSelect(discord.ui.Select):
@@ -108,6 +109,7 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
             fix_mention_permission,
             fix_stale_invite,
             fix_orphaned_webhook,
+            fix_external_bot_usable,
         )
 
         check_id = self.finding.check
@@ -115,8 +117,22 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
 
         # 権限チェック（Bot自身の権限）
         me = guild.me
-        if not me.guild_permissions.manage_roles:
+        external_bot_channel_target = (
+            check_id == "external_bot_usable"
+            and self.finding.target
+            and self.finding.target.startswith("#")
+        )
+        needs_roles = check_id in {"everyone_excess", "role_inheritance"} or (
+            check_id == "external_bot_usable" and not external_bot_channel_target
+        )
+        needs_channels = check_id == "everyone_visible" or (
+            check_id == "external_bot_usable" and external_bot_channel_target
+        )
+        if needs_roles and not me.guild_permissions.manage_roles:
             print("❌ Botに manage_roles 権限がありません")
+            return False
+        if needs_channels and not me.guild_permissions.manage_channels:
+            print("❌ Botに manage_channels 権限がありません")
             return False
 
         if check_id == "everyone_excess":
@@ -132,6 +148,8 @@ class FixConfirmModal(discord.ui.Modal, title="修正確認"):
             return await fix_channel_visibility(guild, self.finding)
         elif check_id == "mention_everyone":
             return await fix_mention_permission(guild, self.finding)
+        elif check_id == "external_bot_usable":
+            return await fix_external_bot_usable(guild, self.finding)
         elif check_id == "stale_invites":
             return await fix_stale_invite(guild, self.finding)
         elif check_id == "integration_webhooks":

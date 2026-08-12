@@ -64,7 +64,7 @@ All commands are **administrator‑only** and respond **ephemerally** (only you 
 | `/audit-channel` | List channels `@everyone` can read. |
 | `/audit-mention` | List non‑admin members who can mention `@everyone` / `@here`. |
 | `/audit-help` | Show the check list and configuration notes. |
-| `/audit-fix` | (Under development) Fix specific issues manually. For now, use the fix buttons from `/audit`. |
+| `/fix` | Select and apply auto-fixable issues. |
 
 ---
 
@@ -90,7 +90,6 @@ Set `CONFIG_FILE=config.json` in `.env`. Example:
 {
   "enabled": [
     "everyone_excess",
-    "external_bot_perms",
     "server_misconfig",
     "role_inheritance",
     "external_bot_usable",
@@ -114,10 +113,9 @@ Available check IDs:
 | ID | Description |
 |----|-------------|
 | `everyone_excess` | Dangerous permissions on `@everyone` |
-| `external_bot_perms` | Dangerous permissions on external bots |
 | `server_misconfig` | 2FA, verification, invite/webhook creation settings |
 | `role_inheritance` | Redundant or leaked permissions via role hierarchy |
-| `external_bot_usable` | External bots usable by anyone |
+| `external_bot_usable` | User-installed/external apps can be used publicly by regular members |
 | `everyone_visible` | Channels readable by `@everyone` |
 | `mention_everyone` | Non‑admin members with `@everyone` / `@here` mention permission |
 | `stale_invites` | Never‑expiring invites |
@@ -141,6 +139,7 @@ After you confirm, the bot applies the fix and offers to re‑audit the server.
 - Remove redundant permissions from lower roles
 - Restrict `@everyone` from viewing public channels
 - Remove `@everyone` / `@here` mention permission from non‑admin roles
+- Remove public user-installed/external app usage from roles or channel overwrites
 - Delete never‑expiring invites
 - Delete orphaned webhooks
 
@@ -165,7 +164,7 @@ main.py          → Bot entry point, loads cogs
 cogs/
   ├── audit.py   → /audit, /audit-channel, /audit-mention
   ├── help.py    → /audit-help
-  └── fix.py     → Fix buttons and /audit-fix (WIP)
+  └── fix.py     → Fix buttons and /fix
 auditor.py       → Core audit logic and fix functions
 findings.py      → Finding data model, embed/text report builders
 risks.py         → Risk score calculator

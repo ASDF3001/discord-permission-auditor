@@ -25,10 +25,9 @@ GUILD_ID = int(GUILD_ID_RAW) if GUILD_ID_RAW.isdigit() else None
 # Check identifiers. Used for on/off toggles and help text.
 CHECK_IDS = [
     "everyone_excess",      # @everyone with dangerous permissions
-    "external_bot_perms",   # external bots with dangerous permissions
     "server_misconfig",     # 2FA, join settings, webhook creation, nsfw
     "role_inheritance",     # overlapping / inherited permission leaks
-    "external_bot_usable",  # external bots usable by @everyone
+    "external_bot_usable",  # user-installed/external apps usable publicly
     "everyone_visible",     # channels @everyone can read
     "mention_everyone",     # members allowed to mention @everyone/@here
     "bot_perm_selfcheck",   # bot's own permission sufficiency

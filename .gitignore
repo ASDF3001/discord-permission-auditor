@@ -4,3 +4,11 @@ __pycache__/
 *.pyc
 *.log
 audit_report*.json
+
+# Added by Safe Git Push
+.pem
+.key
+*.p12
+id_rsa
+.gitpush.toml
+gitpush.log

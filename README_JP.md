@@ -64,7 +64,7 @@ python main.py
 | `/audit-channel` | `@everyone` が読めるチャンネルを一覧表示 |
 | `/audit-mention` | `@everyone` / `@here` をメンションできる非管理者メンバーを一覧表示 |
 | `/audit-help` | チェック一覧と設定方法を表示 |
-| `/audit-fix` | （開発中）手動で特定の問題を修正。当面は `/audit` の修正ボタンを使用 |
+| `/fix` | 自動修正可能な問題を選択して修正 |
 
 ---
 
@@ -92,7 +92,6 @@ python main.py
 {
   "enabled": [
     "everyone_excess",
-    "external_bot_perms",
     "server_misconfig",
     "role_inheritance",
     "external_bot_usable",
@@ -116,10 +115,9 @@ python main.py
 | ID | 説明 |
 |----|------|
 | `everyone_excess` | `@everyone` の危険な権限 |
-| `external_bot_perms` | 外部Botの危険な権限 |
 | `server_misconfig` | 2FA・認証レベル・招待/Webhook作成設定 |
 | `role_inheritance` | ロール階層による冗長・漏洩権限 |
-| `external_bot_usable` | 誰でも使える外部Bot |
+| `external_bot_usable` | 一般メンバーがユーザーインストールBot/外部アプリを公開使用できる設定 |
 | `everyone_visible` | `@everyone` が読めるチャンネル |
 | `mention_everyone` | `@everyone` / `@here` メンションできる非管理者メンバー |
 | `stale_invites` | 期限切れしない招待リンク |
@@ -143,6 +141,7 @@ python main.py
 - 下位ロールから冗長な権限を削除
 - `@everyone` のチャンネル可視性を制限
 - 非管理者ロールから `@everyone` / `@here` メンション権限を削除
+- ユーザーインストールBot/外部アプリの公開使用権限をロールまたはチャンネルから削除
 - 期限切れしない招待リンクを削除
 - 孤立したWebhookを削除
 
@@ -167,7 +166,7 @@ main.py          → エントリーポイント、Cogを読み込み
 cogs/
   ├── audit.py   → /audit, /audit-channel, /audit-mention
   ├── help.py    → /audit-help
-  └── fix.py     → 修正ボタンと /audit-fix（WIP）
+  └── fix.py     → 修正ボタンと /fix
 auditor.py       → 監査ロジックと修正関数
 findings.py      → Findingデータモデル、Embed/テキストレポート生成
 risks.py         → リスクスコア計算
